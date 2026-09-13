@@ -16,7 +16,4 @@ RUN npm install --omit=dev
 
 COPY . .
 
-# Session WhatsApp — doit correspondre au volume monté sur Railway
-VOLUME ["/app/auth_info"]
-
 CMD ["node", "index.js"]
