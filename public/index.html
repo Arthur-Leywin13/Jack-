@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jack - Connexion WhatsApp</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 15px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .header {
+      margin-bottom: 30px;
+    }
+
+    .bot-name {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .bot-subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .qr-section {
+      margin: 30px 0;
+    }
+
+    .qr-box {
+      background: #f5f5f5;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 20px;
+      min-height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .qr-code {
+      max-width: 250px;
+      width: 100%;
+      height: auto;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status.loading {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .status.waiting {
+      background: #fff3e0;
+      color: #f57c00;
+    }
+
+    .status.success {
+      background: #e8f5e9;
+      color: #388e3c;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+
+    .instructions {
+      background: #f9f9f9;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin-top: 20px;
+      text-align: left;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #555;
+    }
+
+    .instructions h3 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+      line-height: 1.8;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .refresh-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 15px;
+      transition: background 0.3s;
+    }
+
+    .refresh-btn:hover {
+      background: #764ba2;
+    }
+
+    .footer {
+      margin-top: 30px;
+      font-size: 12px;
+      color: #999;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="bot-name">🗡️ Jack</div>
+      <div class="bot-subtitle">Bot WhatsApp Multi-Fonctions</div>
+    </div>
+
+    <div class="qr-section">
+      <h2 style="font-size: 18px; margin-bottom: 15px; color: #333;">Scannez le QR Code</h2>
+      <div class="qr-box" id="qrBox">
+        <div class="spinner"></div>
+        <div style="color: #999; font-size: 14px;">Génération du QR code...</div>
+      </div>
+    </div>
+
+    <div class="status loading" id="status">
+      ⏳ Initialisation...
+    </div>
+
+    <button class="refresh-btn" onclick="refreshQR()">🔄 Actualiser</button>
+
+    <div class="instructions">
+      <h3>Instructions:</h3>
+      <ol>
+        <li>Ouvrez WhatsApp sur votre téléphone</li>
+        <li>Allez dans <strong>Paramètres → Appareils connectés</strong></li>
+        <li>Tapez sur <strong>Connecter un appareil</strong></li>
+        <li>Scannez le QR code ci-dessus</li>
+        <li>Le bot se connectera automatiquement</li>
+      </ol>
+    </div>
+
+    <div class="footer">
+      Page auto-actualisée toutes les 3 secondes
+    </div>
+  </div>
+
+  <script>
+    async function fetchQR() {
+      try {
+        const response = await fetch('/api/qr')
+        const data = await response.json()
+
+        const statusEl = document.getElementById('status')
+        const qrBox = document.getElementById('qrBox')
+
+        if (data.qr) {
+          qrBox.innerHTML = `<img src="${data.qr}" alt="QR Code" class="qr-code">`
+          statusEl.className = 'status waiting'
+          statusEl.textContent = '⏳ ' + data.status
+        } else if (data.status.includes('✅')) {
+          qrBox.innerHTML = '<div style="font-size: 48px; margin: 20px 0;">✅</div><div style="color: #388e3c; font-size: 16px; font-weight: bold;">Connecté!</div>'
+          statusEl.className = 'status success'
+          statusEl.textContent = '✅ ' + data.status
+        } else if (data.status.includes('❌')) {
+          qrBox.innerHTML = '<div style="font-size: 48px; margin: 20px 0;">❌</div><div style="color: #d32f2f; font-size: 14px;">Redémarrez la connexion</div>'
+          statusEl.className = 'status error'
+          statusEl.textContent = '❌ ' + data.status
+        } else {
+          qrBox.innerHTML = '<div class="spinner"></div><div style="color: #999; font-size: 14px;">' + data.status + '</div>'
+          statusEl.className = 'status loading'
+          statusEl.textContent = '⏳ ' + data.status
+        }
+      } catch (error) {
+        console.error('Erreur:', error)
+        document.getElementById('status').innerHTML = '❌ Erreur de connexion'
+      }
+    }
+
+    function refreshQR() {
+      fetchQR()
+    }
+
+    // Actualise le QR code toutes les 3 secondes
+    fetchQR()
+    setInterval(fetchQR, 3000)
+  </script>
+</body>
+</html>
+

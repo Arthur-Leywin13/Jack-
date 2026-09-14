@@ -1,15 +1,22 @@
+const express = require('express')
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
 } = require('@whiskeysockets/baileys')
 const { Boom } = require('@hapi/boom')
-const qrcode = require('qrcode-terminal')
+const qrcode = require('qrcode')
 const fs = require('fs')
 const path = require('path')
 
 const config = require('./config')
 const db = require('./lib/db')
+
+const app = express()
+const PORT = process.env.PORT || 3000
+
+let currentQR = null
+let connectionStatus = 'Initialisation...'
 
 // Charge dynamiquement toutes les commandes du dossier commands/
 const commands = new Map()
@@ -19,6 +26,30 @@ for (const file of fs.readdirSync(path.join(__dirname, 'commands'))) {
   commands.set(cmd.name, cmd)
   for (const alias of cmd.aliases || []) commands.set(alias, cmd)
 }
+
+// Routes Express
+app.use(express.static('public'))
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
+
+app.get('/api/qr', async (req, res) => {
+  if (!currentQR) {
+    return res.json({ qr: null, status: connectionStatus })
+  }
+  try {
+    const qrImage = await qrcode.toDataURL(currentQR)
+    res.json({ qr: qrImage, status: connectionStatus })
+  } catch (err) {
+    console.error('Erreur génération QR:', err)
+    res.json({ qr: null, status: connectionStatus, error: err.message })
+  }
+})
+
+app.get('/api/status', (req, res) => {
+  res.json({ status: connectionStatus })
+})
 
 async function start() {
   const { state, saveCreds } = await useMultiFileAuthState('auth_info')
@@ -33,14 +64,27 @@ async function start() {
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update
 
-    if (qr) qrcode.generate(qr, { small: true })
+    if (qr) {
+      currentQR = qr
+      connectionStatus = '⏳ En attente de scan du QR code...'
+      console.log('QR Code généré, prêt pour le scan')
+    }
 
     if (connection === 'close') {
+      currentQR = null
       const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut
-      console.log('Connexion fermée.', shouldReconnect ? 'Reconnexion...' : 'Déconnecté (relance manuelle requise).')
-      if (shouldReconnect) start()
+      connectionStatus = shouldReconnect
+        ? '🔄 Reconnexion...'
+        : '❌ Déconnecté (relance manuelle requise)'
+      console.log(
+        'Connexion fermée.',
+        shouldReconnect ? 'Reconnexion...' : 'Déconnecté (relance manuelle requise).'
+      )
+      if (shouldReconnect) setTimeout(() => start(), 3000)
     } else if (connection === 'open') {
+      currentQR = null
+      connectionStatus = `✅ ${config.BOT_NAME} connecté`
       console.log(`✅ ${config.BOT_NAME} connecté.`)
     }
   })
@@ -88,7 +132,7 @@ async function start() {
 
     const mentionedJids = msg.message.extendedTextMessage?.contextInfo?.mentionedJid || []
     const quotedMessage = msg.message.extendedTextMessage?.contextInfo?.quotedMessage || null
-    const pushName = msg.pushName || 'Quelqu\'un'
+    const pushName = msg.pushName || "Quelqu'un"
 
     try {
       await cmd.execute({
@@ -109,9 +153,18 @@ async function start() {
       })
     } catch (err) {
       console.error(`Erreur commande ${cmd.name}:`, err)
-      await sock.sendMessage(jid, { text: `Un imprévu... même moi, je n'échappe pas au chaos parfois.` })
+      await sock.sendMessage(jid, {
+        text: `Un imprévu... même moi, je n'échappe pas au chaos parfois.`,
+      })
     }
   })
 }
 
+// Démarre le serveur web
+app.listen(PORT, () => {
+  console.log(`🌐 Serveur web lancé sur http://localhost:${PORT}`)
+})
+
+// Démarre le bot
 start()
+
